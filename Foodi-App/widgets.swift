@@ -56,12 +56,8 @@ struct WidgetDetailView: View {
                     }
                     
                 case .map:
-                    // Full interactive map view
-                    ZStack {
-                        MapWidgetView()
-                            .ignoresSafeArea(edges: .bottom)
-                            .padding(.top, 40) // moves MapWidgetView down slightly
-                    }
+                    MapDetailScreen()
+
                 }
             }
             

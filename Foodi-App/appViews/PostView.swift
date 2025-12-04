@@ -87,13 +87,14 @@ struct PostView: View {
                         .cornerRadius(10)
                     }
                     .fullScreenCover(isPresented: $showRestaurantMap) {
-                        MapWidgetView(onSelectRestaurant: { place in
-                            restaurantTag = place.item.name ?? "Unknown"
-                            restaurantLat = place.item.location.coordinate.latitude
-                            restaurantLon = place.item.location.coordinate.longitude
+                        MapWidgetView { detail in
+                            restaurantTag = detail.name
+                            restaurantLat = detail.coordinate.latitude
+                            restaurantLon = detail.coordinate.longitude
                             showRestaurantMap = false
-                        })
+                        }
                     }
+                    
 
                     // Description Field
                     TextField("Write a description...", text: $description, axis: .vertical)

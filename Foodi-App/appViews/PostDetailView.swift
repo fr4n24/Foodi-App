@@ -40,22 +40,31 @@ struct PostDetailView: View {
                     if let restaurantName = (post.restaurant ?? post.restaurantName),
                        !restaurantName.isEmpty {
                         
-                        NavigationLink(
-                            destination: RestaurantProfileView(
-                                restaurantName: restaurantName,
+                        NavigationLink {
+                            let detail = RestaurantDetail(
+                                name: restaurantName,
                                 coordinate: CLLocationCoordinate2D(
                                     latitude: post.restaurantLat ?? 0,
                                     longitude: post.restaurantLon ?? 0
-                                )
+                                ),
+                                address: "Unknown address",
+                                phone: nil,
+                                url: nil,
+                                category: nil
                             )
-                        ) {
+                            
+                            RestaurantProfileView(restaurant: detail)
+                        } label: {
                             Label(restaurantName, systemImage: "mappin.and.ellipse")
                                 .foregroundColor(.foodiBlue)
                                 .font(.headline)
                         }
                         .buttonStyle(.plain)
-                    }
-                }
+                        
+                    } // ← closes the if
+                } // ← closes the VStack
+
+                    
                 
                 HStack(spacing: 4) {
                     ForEach(0..<Int(post.rating ?? 0), id: \.self) { _ in
