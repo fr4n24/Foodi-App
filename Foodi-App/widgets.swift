@@ -19,7 +19,7 @@ struct WidgetButton: View {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.foodiBlue.opacity(0.85))
                     .shadow(radius: 3)
-                    .frame(height: 300) // taller widgets
+                    .frame(height: 300)
                 
                 Text(type.title)
                     .font(.headline)
@@ -30,7 +30,7 @@ struct WidgetButton: View {
     }
 }
 
-// MARK: - Widget Detail View (Expanded full-screen views)
+// MARK: - Widget Detail View
 struct WidgetDetailView: View {
     var type: WidgetType
     @Binding var selectedWidget: WidgetType?
@@ -47,17 +47,28 @@ struct WidgetDetailView: View {
 
                 case .leaderboard:
                     NavigationView {
-                        LeaderboardView()   // ✅ use your real backend-connected view
+                        LeaderboardView()
                     }
                 
                 case .notifications:
                     NavigationView {
                         NotificationsView()
                     }
-                    
-                case .map:
-                    MapDetailScreen()
 
+                case .map:
+                    // ↓↓↓ Choose the version you want ↓↓↓
+                    MapDetailScreen()
+                    // OR:
+                    // ZStack {
+                    //     MapWidgetView()
+                    //         .ignoresSafeArea(edges: .bottom)
+                    //         .padding(.top, 40)
+                    // }
+
+                case .saved:
+                    NavigationView {
+                        SavedPostsView()
+                    }
                 }
             }
             
@@ -74,7 +85,7 @@ struct WidgetDetailView: View {
 
 // MARK: - Widget Type Enum
 enum WidgetType: String, Identifiable {
-    case feed, leaderboard, notifications, map
+    case feed, leaderboard, notifications, map, saved
     
     var id: String { rawValue }
     
@@ -84,6 +95,7 @@ enum WidgetType: String, Identifiable {
         case .leaderboard: return "Leaderboard (Top Foodies)"
         case .notifications: return "Notifications"
         case .map: return "Map"
+        case .saved: return "Saved Posts"
         }
     }
 }
