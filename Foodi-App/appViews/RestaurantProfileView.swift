@@ -16,6 +16,8 @@ struct RestaurantProfileView: View {
     @State private var averageRating: Double = 0.0
     @State private var hours: [String] = []
     @State private var showFullMap = false
+    @State private var isFavorited = false
+
     
     var body: some View {
         ScrollView {
@@ -55,6 +57,24 @@ struct RestaurantProfileView: View {
                         .foregroundColor(.secondary)
                 }
                 
+                Button {
+                    FavoriteManager.shared.toggleFavorite(restaurant) { saved in
+                        withAnimation {
+                            isFavorited = saved
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Image(systemName: isFavorited ? "star.fill" : "star")
+                            .foregroundColor(isFavorited ? .yellow : .gray)
+                        Text(isFavorited ? "Saved" : "Save")
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(10)
+                }
+
                 
                 // MARK: - INFORMATION SECTION
                 VStack(alignment: .leading, spacing: 8) {
@@ -138,6 +158,11 @@ struct RestaurantProfileView: View {
                         .reduce(0, +) / Double(fetched.count)
                 }
             }
+            
+            FavoriteManager.shared.isFavorited(restaurant) { saved in
+                self.isFavorited = saved
+            }
+
         }
         .navigationTitle(restaurant.name)
         .navigationBarTitleDisplayMode(.inline)
