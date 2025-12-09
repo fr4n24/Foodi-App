@@ -141,8 +141,12 @@ struct MapWidgetView: View {
     
     private func restaurantInfoCard(for restaurant: RestaurantResult) -> some View {
         Button {
-            onSelectRestaurant?(RestaurantDetail(item: restaurant.item))
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                selectedRestaurantID = nil
+                onSelectRestaurant?(RestaurantDetail(item: restaurant.item))
+            }
         } label: {
+
             VStack(alignment: .leading, spacing: 6) {
                 Text(restaurant.item.name ?? "Unknown")
                     .font(.headline)
