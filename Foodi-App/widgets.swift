@@ -19,7 +19,7 @@ struct WidgetButton: View {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.foodiBlue.opacity(0.85))
                     .shadow(radius: 3)
-                    .frame(height: 300) // taller widgets
+                    .frame(height: 300)
                 
                 Text(type.title)
                     .font(.headline)
@@ -30,7 +30,7 @@ struct WidgetButton: View {
     }
 }
 
-// MARK: - Widget Detail View (Expanded full-screen views)
+// MARK: - Widget Detail View
 struct WidgetDetailView: View {
     var type: WidgetType
     @Binding var selectedWidget: WidgetType?
@@ -47,21 +47,24 @@ struct WidgetDetailView: View {
 
                 case .leaderboard:
                     NavigationView {
-                        LeaderboardView()   // ✅ use your real backend-connected view
+                        LeaderboardView()
                     }
                 
                 case .notifications:
                     NavigationView {
                         NotificationsView()
                     }
-                    
+
                 case .map:
-                    // Full interactive map view
-                    ZStack {
-                        MapWidgetView()
-                            .ignoresSafeArea(edges: .bottom)
-                            .padding(.top, 40) // moves MapWidgetView down slightly
-                    }
+                    // ↓↓↓ Choose the version you want ↓↓↓
+                    MapDetailScreen()
+                    // OR:
+                    // ZStack {
+                    //     MapWidgetView()
+                    //         .ignoresSafeArea(edges: .bottom)
+                    //         .padding(.top, 40)
+                    // }
+
                 case .saved:
                     NavigationView {
                         SavedPostsView()

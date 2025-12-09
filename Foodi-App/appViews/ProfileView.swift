@@ -1,7 +1,7 @@
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
-
+import MapKit
 import FirebaseStorage
 
 struct ProfileView: View {
@@ -35,6 +35,9 @@ struct ProfileView: View {
     @State private var newFullName: String = ""
     @State private var isUpdatingProfile: Bool = false
     @State private var showImagePicker: Bool = false
+    
+    @State private var favorites: [RestaurantDetail] = []
+
     
     private let db = Firestore.firestore()
     
@@ -266,6 +269,67 @@ struct ProfileView: View {
                                             .buttonStyle(.plain)
                                         }
                                     }
+                                    
+                                    // MARK: - Favorites Section
+                                    Divider()
+                                        .padding(.vertical, 10)
+
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        
+                                        Text("Saved Restaurants")
+                                            .font(.title3)
+                                            .fontWeight(.semibold)
+                                            .padding(.horizontal)
+
+                                        if favorites.isEmpty {
+                                            Text("You haven't saved any restaurants yet.")
+                                                .foregroundColor(.secondary)
+                                                .padding(.horizontal)
+                                        } else {
+                                            ForEach(favorites, id: \.name) { fav in
+                                                NavigationLink {
+                                                    RestaurantProfileView(restaurant: fav)
+                                                } label: {
+                                                    HStack(spacing: 12) {
+
+                                                        // Small map preview
+                                                        Map (
+                                                            position: .constant(
+                                                                .region(
+                                                                    MKCoordinateRegion(
+                                                                        center: fav.coordinate,
+                                                                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                                                                    )
+                                                                )
+                                                            )
+                                                        ) {
+                                                            
+                                                        }
+                                                        .frame(width: 70, height: 70)
+                                                        .cornerRadius(10)
+
+
+                                                        VStack(alignment: .leading, spacing: 4) {
+                                                            Text(fav.name)
+                                                                .font(.headline)
+                                                            Text(fav.address)
+                                                                .font(.subheadline)
+                                                                .foregroundColor(.secondary)
+                                                        }
+
+                                                        Spacer()
+
+                                                        Image(systemName: "chevron.right")
+                                                            .foregroundColor(.gray)
+                                                    }
+                                                    .padding(.horizontal)
+                                                    .padding(.vertical, 6)
+                                                }
+                                                .buttonStyle(.plain)
+                                            }
+                                        }
+                                    }
+                                    .padding(.bottom, 20)
 
                                 }
                             }
@@ -282,6 +346,7 @@ struct ProfileView: View {
                     }
                     .onAppear {
                         loadUserProfile()
+                        loadFavorites()
                     }
                     // MARK: - Edit Profile Sheet
                     .sheet(isPresented: $showEditSheet) {
@@ -395,6 +460,15 @@ struct ProfileView: View {
             }
         }
     }
+    
+    private func loadFavorites() {
+        FavoriteManager.shared.fetchFavorites { list in
+            DispatchQueue.main.async {
+                self.favorites = list
+            }
+        }
+    }
+
     
     private func loadUserPosts(uid: String) {
         db.collection("posts")
@@ -657,3 +731,4 @@ struct ImagePicker: UIViewControllerRepresentable {
         }
     }
 }
+

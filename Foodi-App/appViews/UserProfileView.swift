@@ -1,6 +1,7 @@
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
+import MapKit
 
 struct UserProfileView: View {
     let userId: String   // 👈 The Firestore UID of the user to show
@@ -13,6 +14,8 @@ struct UserProfileView: View {
     @State private var posts: [Post] = []
     @State private var isFollowing = false
     @State private var selectedPost: Post? = nil
+    @State private var favorites: [RestaurantDetail] = []
+
 
 
     var body: some View {
@@ -94,7 +97,6 @@ struct UserProfileView: View {
                 Divider().padding(.vertical, 8)
 
                 // MARK: - Posts
-                // MARK: - Posts
                 LazyVStack(spacing: 16) {
                     ForEach(posts) { post in
                         NavigationLink {
@@ -143,6 +145,67 @@ struct UserProfileView: View {
                         .buttonStyle(.plain)
                     }
                 }
+                
+                // MARK: - Favorites Section
+                if Auth.auth().currentUser?.uid == userId {
+                    VStack(alignment: .leading, spacing: 12) {
+
+                        Divider().padding(.top, 16)
+
+                        Text("My Saved Restaurants")
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal)
+
+                        if favorites.isEmpty {
+                            Text("You haven't saved any restaurants yet.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal)
+                        } else {
+                            VStack(spacing: 12) {
+                                ForEach(favorites, id: \.name) { fav in
+                                    NavigationLink {
+                                        RestaurantProfileView(restaurant: fav)
+                                    } label: {
+                                        HStack(spacing: 12) {
+                                            // Map preview
+                                            Map(position: .constant(.region(
+                                                MKCoordinateRegion(
+                                                    center: fav.coordinate,
+                                                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                                                )
+                                            ))) {
+                                                Marker(fav.name, coordinate: fav.coordinate)
+                                            }
+                                            .frame(width: 80, height: 80)
+                                            .cornerRadius(10)
+
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(fav.name)
+                                                    .font(.headline)
+
+                                                Text(fav.address)
+                                                    .font(.subheadline)
+                                                    .foregroundColor(.secondary)
+                                                    .lineLimit(2)
+                                            }
+
+                                            Spacer()
+
+                                            Image(systemName: "chevron.right")
+                                                .foregroundColor(.gray)
+                                        }
+                                        .padding(.horizontal)
+                                        .padding(.vertical, 8)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                }
+
 
             }
             .padding(.top)
@@ -154,6 +217,7 @@ struct UserProfileView: View {
             loadPosts()
             loadFollowerCounts()
             checkIfFollowing()
+            loadFavorites()
         }
     }
 
@@ -266,4 +330,18 @@ struct UserProfileView: View {
             }
         }
     }
+    
+
+    private func loadFavorites() {
+        guard let currentUid = Auth.auth().currentUser?.uid else { return }
+        if currentUid != userId { return } // only show on own profile
+
+        FavoriteManager.shared.fetchFavorites { list in
+            DispatchQueue.main.async {
+                self.favorites = list
+            }
+        }
+    }
+
+
 }
