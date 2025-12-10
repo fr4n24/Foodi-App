@@ -1,7 +1,7 @@
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
-
+import MapKit
 import FirebaseStorage
 
 struct ProfileView: View {
@@ -35,6 +35,9 @@ struct ProfileView: View {
     @State private var newFullName: String = ""
     @State private var isUpdatingProfile: Bool = false
     @State private var showImagePicker: Bool = false
+    
+    @State private var favorites: [RestaurantDetail] = []
+
     
     private let db = Firestore.firestore()
     
@@ -266,6 +269,67 @@ struct ProfileView: View {
                                             .buttonStyle(.plain)
                                         }
                                     }
+                                    
+                                    // MARK: - Favorites Section
+                                    Divider()
+                                        .padding(.vertical, 10)
+
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        
+                                        Text("Saved Restaurants")
+                                            .font(.title3)
+                                            .fontWeight(.semibold)
+                                            .padding(.horizontal)
+
+                                        if favorites.isEmpty {
+                                            Text("You haven't saved any restaurants yet.")
+                                                .foregroundColor(.secondary)
+                                                .padding(.horizontal)
+                                        } else {
+                                            ForEach(favorites, id: \.name) { fav in
+                                                NavigationLink {
+                                                    RestaurantProfileView(restaurant: fav)
+                                                } label: {
+                                                    HStack(spacing: 12) {
+
+                                                        // Small map preview
+                                                        Map (
+                                                            position: .constant(
+                                                                .region(
+                                                                    MKCoordinateRegion(
+                                                                        center: fav.coordinate,
+                                                                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                                                                    )
+                                                                )
+                                                            )
+                                                        ) {
+                                                            
+                                                        }
+                                                        .frame(width: 70, height: 70)
+                                                        .cornerRadius(10)
+
+
+                                                        VStack(alignment: .leading, spacing: 4) {
+                                                            Text(fav.name)
+                                                                .font(.headline)
+                                                            Text(fav.address)
+                                                                .font(.subheadline)
+                                                                .foregroundColor(.secondary)
+                                                        }
+
+                                                        Spacer()
+
+                                                        Image(systemName: "chevron.right")
+                                                            .foregroundColor(.gray)
+                                                    }
+                                                    .padding(.horizontal)
+                                                    .padding(.vertical, 6)
+                                                }
+                                                .buttonStyle(.plain)
+                                            }
+                                        }
+                                    }
+                                    .padding(.bottom, 20)
 
                                 }
                             }
@@ -282,6 +346,7 @@ struct ProfileView: View {
                     }
                     .onAppear {
                         loadUserProfile()
+                        loadFavorites()
                     }
                     // MARK: - Edit Profile Sheet
                     .sheet(isPresented: $showEditSheet) {
@@ -372,11 +437,16 @@ struct ProfileView: View {
                 bio = data["bio"] as? String ?? ""
                 username = data["username"] as? String ?? username // fallback to previous username
                 postsCount = data["postsCount"] as? Int ?? 0
-                if let profileImageString = data["profilePicURL"] as? String, let url = URL(string: profileImageString) {
-                    profileImageURL = url
+                if let profileImageString = data["profilePicURL"] as? String,
+                   !profileImageString.trimmingCharacters(in: .whitespaces).isEmpty,
+                   let url = URL(string: profileImageString) {
+
+                    self.profileImageURL = url
+
                 } else {
-                    profileImageURL = nil
+                    self.profileImageURL = nil   //
                 }
+
                 
                 // Fetch followers count from subcollection
                 let followersRef = db.collection("users").document(uid).collection("followers")
@@ -395,6 +465,15 @@ struct ProfileView: View {
             }
         }
     }
+    
+    private func loadFavorites() {
+        FavoriteManager.shared.fetchFavorites { list in
+            DispatchQueue.main.async {
+                self.favorites = list
+            }
+        }
+    }
+
     
     private func loadUserPosts(uid: String) {
         db.collection("posts")
@@ -466,49 +545,58 @@ struct ProfileView: View {
         NavigationView {
             VStack(spacing: 24) {
                 // Profile Image Picker
-                ZStack {
-                    if let selectedImage = selectedImage {
-                        Image(uiImage: selectedImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 100, height: 100)
-                            .clipShape(Circle())
-                    } else if let url = profileImageURL {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .empty:
-                                ProgressView()
-                                    .frame(width: 100, height: 100)
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 100, height: 100)
-                                    .clipShape(Circle())
-                            case .failure:
-                                Image(systemName: "person.crop.circle.fill")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 100, height: 100)
-                                    .foregroundColor(.secondary)
-                            @unknown default:
-                                EmptyView()
+                ZStack(alignment: .bottomTrailing) {
+
+                    // Current or newly-selected profile image
+                    Group {
+                        if let selectedImage = selectedImage {
+                            Image(uiImage: selectedImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 100, height: 100)
+                                .clipShape(Circle())
+                        } else if let url = profileImageURL {
+                            AsyncImage(url: url) { phase in
+                                switch phase {
+                                case .empty:
+                                    ProgressView()
+                                        .frame(width: 100, height: 100)
+                                case .success(let image):
+                                    image.resizable()
+                                        .scaledToFill()
+                                        .frame(width: 100, height: 100)
+                                        .clipShape(Circle())
+                                default:
+                                    Image(systemName: "person.crop.circle.fill")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 100, height: 100)
+                                        .foregroundColor(.secondary)
+                                }
                             }
+                        } else {
+                            Image(systemName: "person.crop.circle.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 100, height: 100)
+                                .foregroundColor(.secondary)
                         }
-                    } else {
-                        Image(systemName: "person.crop.circle.fill")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 100, height: 100)
-                            .foregroundColor(.secondary)
                     }
-                    Circle()
-                        .stroke(Color.accentColor, lineWidth: 2)
-                        .frame(width: 100, height: 100)
+
+                    // Pencil Button (opens image picker)
+                    Button {
+                        showImagePicker = true
+                    } label: {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.system(size: 26))
+                            .foregroundColor(.blue)
+                            .padding(4)
+                            .background(.white)
+                            .clipShape(Circle())
+                            .shadow(radius: 2)
+                    }
                 }
-                .onTapGesture {
-                    showImagePicker = true
-                }
+                .frame(width: 100, height: 100)
                 .padding(.top, 24)
 
                 // Full Name
@@ -587,7 +675,11 @@ struct ProfileView: View {
                         bio = newBio
                         if let imageURL = imageURL {
                             profileImageURL = URL(string: imageURL)
+                        } else {
+                            // fallback
+                            profileImageURL = profileImageURL
                         }
+
                         showEditSheet = false
                     }
                 }
@@ -596,7 +688,7 @@ struct ProfileView: View {
 
         // If a new image is selected, upload to Firebase Storage
         if let image = selectedImage, let imageData = image.jpegData(compressionQuality: 0.8) {
-            let storageRef = Storage.storage().reference().child("profile_images/\(uid).jpg")
+            let storageRef = Storage.storage().reference().child("profilePictures/\(uid).jpg")
             storageRef.putData(imageData, metadata: nil) { metadata, error in
                 if let error = error {
                     DispatchQueue.main.async {
@@ -617,7 +709,9 @@ struct ProfileView: View {
                 }
             }
         } else {
-            finishUpdate(with: nil)
+            finishUpdate(with: profileImageURL?.absoluteString)
+
+
         }
     }
 }
@@ -657,3 +751,4 @@ struct ImagePicker: UIViewControllerRepresentable {
         }
     }
 }
+

@@ -10,6 +10,7 @@ struct PostDetailView: View {
     @State private var commentText = ""
     @State private var likeCount: Int = 0
     @State private var userHasLiked = false
+    @State private var isSaved = false
     @State private var comments: [Comment] = []
     @State private var showMap = false
     @State private var mapTarget: CLLocationCoordinate2D? = nil
@@ -40,22 +41,31 @@ struct PostDetailView: View {
                     if let restaurantName = (post.restaurant ?? post.restaurantName),
                        !restaurantName.isEmpty {
                         
-                        NavigationLink(
-                            destination: RestaurantProfileView(
-                                restaurantName: restaurantName,
+                        NavigationLink {
+                            let detail = RestaurantDetail(
+                                name: restaurantName,
                                 coordinate: CLLocationCoordinate2D(
                                     latitude: post.restaurantLat ?? 0,
                                     longitude: post.restaurantLon ?? 0
-                                )
+                                ),
+                                address: "Unknown address",
+                                phone: nil,
+                                url: nil,
+                                category: nil
                             )
-                        ) {
+                            
+                            RestaurantProfileView(restaurant: detail)
+                        } label: {
                             Label(restaurantName, systemImage: "mappin.and.ellipse")
                                 .foregroundColor(.foodiBlue)
                                 .font(.headline)
                         }
                         .buttonStyle(.plain)
-                    }
-                }
+                        
+                    } // ← closes the if
+                } // ← closes the VStack
+
+                    
                 
                 HStack(spacing: 4) {
                     ForEach(0..<Int(post.rating ?? 0), id: \.self) { _ in
@@ -91,6 +101,20 @@ struct PostDetailView: View {
                 } label: {
                     Label("\(likeCount) Like\(likeCount == 1 ? "" : "s")", systemImage: userHasLiked ? "heart.fill" : "heart")
                         .foregroundColor(userHasLiked ? .red : .primary)
+                        .font(.headline)
+                }
+                
+                Divider().padding(.vertical, 8)
+                
+                // BOOKMARK BUTTON
+                Button {
+                    PostManager.shared.toggleSaved(postId: post.id) { saved in
+                        isSaved = saved
+                    }
+                } label: {
+                    Label(isSaved ? "Saved" : "Save for later",
+                          systemImage: isSaved ? "bookmark.fill" : "bookmark")
+                        .foregroundColor(isSaved ? .blue : .primary)
                         .font(.headline)
                 }
                 
@@ -193,6 +217,10 @@ struct PostDetailView: View {
             
             PostManager.shared.listenForComments(of: post) { newComments in
                 comments = newComments
+            }
+            
+            PostManager.shared.isPostSaved(postId: post.id) { saved in
+                self.isSaved = saved
             }
         }
     }

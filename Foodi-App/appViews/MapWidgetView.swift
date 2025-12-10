@@ -10,7 +10,7 @@ import MapKit
 import CoreLocation
 
 struct MapWidgetView: View {
-    var onSelectRestaurant: ((RestaurantResult) -> Void)? = nil
+    var onSelectRestaurant: ((RestaurantDetail) -> Void)? = nil
     @State private var position = MapCameraPosition.region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 34.2411, longitude: -119.0434),
@@ -141,8 +141,12 @@ struct MapWidgetView: View {
     
     private func restaurantInfoCard(for restaurant: RestaurantResult) -> some View {
         Button {
-            onSelectRestaurant?(restaurant)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                selectedRestaurantID = nil
+                onSelectRestaurant?(RestaurantDetail(item: restaurant.item))
+            }
         } label: {
+
             VStack(alignment: .leading, spacing: 6) {
                 Text(restaurant.item.name ?? "Unknown")
                     .font(.headline)
@@ -158,7 +162,6 @@ struct MapWidgetView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 
-                // User rating placeholder - just so we can show we have something, we can add real variation later
                 HStack(spacing: 4) {
                     ForEach(0..<5) { _ in
                         Image(systemName: "fork.knife.circle.fill")
@@ -167,8 +170,6 @@ struct MapWidgetView: View {
                     }
                 }
                 .padding(.top, 4)
-                
-                Spacer()
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -179,7 +180,7 @@ struct MapWidgetView: View {
         }
         .buttonStyle(PlainButtonStyle())
     }
-    
+
     // MARK: - Logic
     
     private func performSearch() {

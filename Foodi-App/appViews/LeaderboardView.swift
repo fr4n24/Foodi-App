@@ -1,9 +1,8 @@
 import SwiftUI
 
 struct LeaderboardView: View {
-    @Environment(\.dismiss) private var dismiss
     @StateObject private var vm = LeaderboardViewModel()
-    @State private var selectedFilter: LeaderboardFilter = .users   // .users / .restaurants / .foodTypes
+    @State private var selectedFilter: LeaderboardFilter = .users   // users / restaurants / food types
 
     var body: some View {
         ZStack {
@@ -23,7 +22,7 @@ struct LeaderboardView: View {
         .onAppear { vm.fetchOnce() }
     }
 
-    // MARK: - Header (similar to HomeView)
+    // MARK: - Header
     private var header: some View {
         ZStack {
             Color.foodiBlue
@@ -31,17 +30,16 @@ struct LeaderboardView: View {
 
             HStack {
                 Text("Leaderboard")
-                    .font(.system(size: 34, weight: .bold))   // smaller so it fits in one line
+                    .font(.system(size: 34, weight: .bold))
                     .foregroundColor(.white)
 
                 Spacer()
-
             }
             .padding(.horizontal)
             .padding(.top, 8)
             .padding(.bottom, 12)
         }
-        .frame(height: 110)   // close to HomeView bar height
+        .frame(height: 110)
     }
 
     // MARK: - Filter Picker
@@ -64,21 +62,31 @@ struct LeaderboardView: View {
             case .users:
                 ForEach(vm.users.indices, id: \.self) { i in
                     let u = vm.users[i]
-                    leaderboardRow(
-                        rank: i + 1,
-                        title: u.username,
-                        valueText: "\(u.score) pts"
-                    )
+
+                    NavigationLink {
+                        UserProfileView(userId: u.id)
+                    } label: {
+                        leaderboardRow(
+                            rank: i + 1,
+                            title: u.username,
+                            valueText: "\(u.score) pts"
+                        )
+                    }
                 }
 
             case .restaurants:
                 ForEach(vm.restaurantRanks.indices, id: \.self) { i in
                     let r = vm.restaurantRanks[i]
-                    leaderboardRow(
-                        rank: i + 1,
-                        title: r.name,
-                        valueText: "\(r.count) posts"
-                    )
+
+                    NavigationLink {
+                        RestaurantProfileLoaderView(restaurantName: r.name)
+                    } label: {
+                        leaderboardRow(
+                            rank: i + 1,
+                            title: r.name,
+                            valueText: "\(r.count) posts"
+                        )
+                    }
                 }
 
             case .foodTypes:
@@ -95,7 +103,7 @@ struct LeaderboardView: View {
         .listStyle(.plain)
     }
 
-    // MARK: - Row Builder
+    // MARK: - Row builder
     private func leaderboardRow(rank: Int, title: String, valueText: String) -> some View {
         HStack {
             Text("#\(rank)")
