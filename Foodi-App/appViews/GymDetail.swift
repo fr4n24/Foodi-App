@@ -1,7 +1,7 @@
 import MapKit
 import Contacts
 
-struct RestaurantDetail {
+struct GymDetail {
     let name: String
     let coordinate: CLLocationCoordinate2D
     let address: String
@@ -23,15 +23,7 @@ struct RestaurantDetail {
             self.address = formatted
         }
         else if let title = item.placemark.title {
-            // Fallback from placemark
             self.address = title
-        }
-        else if let formatted = item.addressRepresentations?.description {
-            // Last resort: readable fallback
-            self.address = formatted
-                .replacingOccurrences(of: "\n", with: ", ")
-                .replacingOccurrences(of: "{", with: "")
-                .replacingOccurrences(of: "}", with: "")
         }
         else {
             self.address = "Unknown address"

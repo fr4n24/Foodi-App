@@ -1,6 +1,6 @@
 //
 //  SettingsView.swift
-//  Foodi
+//  GymLink
 //
 //  Created by David R on 11/04/25.
 //

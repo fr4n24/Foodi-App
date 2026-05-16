@@ -1,6 +1,6 @@
 //
 //  SplashView.swift
-//  Foodi
+//  GymLink
 //
 //  Created by d-rod on 10/8/25.
 //
@@ -13,7 +13,7 @@ struct SplashView: View {
     var body: some View {
         ZStack {
             Color.foodiBlue.ignoresSafeArea()   // was Color.blue
-            Text("Foodi")
+            Text("GymLink")
                 .font(.system(size: 42, weight: .bold))
                 .foregroundColor(.white)
                 .opacity(isActive ? 0 : 1)

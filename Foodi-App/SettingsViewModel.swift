@@ -1,6 +1,6 @@
 //
 //  SettingsViewModel.swift
-//  Foodi
+//  GymLink
 //
 //  Created by d-rod on 11/5/25.
 //
@@ -96,10 +96,7 @@ final class SettingsViewModel: ObservableObject {
     private func loadStaticAuthFields() {
         guard let user = AuthManager.shared.getCurrentUser() else { return }
         email = user.email ?? ""
-        // Derive username from email pattern: username@foodiapp.com
-        if let at = email.firstIndex(of: "@") {
-            username = String(email[..<at])
-        }
+        // Username is loaded from Firestore via the profile listener below
     }
 
     private func startProfileListener() {
@@ -110,10 +107,9 @@ final class SettingsViewModel: ObservableObject {
     }
 
     private func apply(_ dict: [String: Any]) {
-        self.fullName = dict["fullName"] as? String ?? self.fullName
-        self.bio = dict["bio"] as? String ?? self.bio
-        if let n = dict["notificationsEnabled"] as? Bool {
-            self.notificationsEnabled = n
-        }
+        if let v = dict["username"] as? String { self.username = v }
+        if let v = dict["fullName"] as? String { self.fullName = v }
+        if let v = dict["bio"] as? String      { self.bio = v }
+        if let n = dict["notificationsEnabled"] as? Bool { self.notificationsEnabled = n }
     }
 }

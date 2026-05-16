@@ -1,6 +1,6 @@
 //
 //  ScoreService.swift
-//  Foodi
+//  GymLink
 //
 //  Created by Tyler Hedberg on 11/6/25.
 //

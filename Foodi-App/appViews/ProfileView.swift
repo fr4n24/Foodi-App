@@ -1,754 +1,752 @@
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
-import MapKit
 import FirebaseStorage
+import MapKit
+
+private let workoutSplits = ["PPL", "Upper/Lower", "Full Body", "Bro Split", "5x5", "Push/Pull", "Custom"]
+private let weekDays      = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 struct ProfileView: View {
-    // MARK: - Environment
     @Environment(\.dismiss) private var dismiss
-    
-    // MARK: - Auth state
     @State private var currentUser: User? = AuthManager.shared.getCurrentUser()
-    @State private var isSignUp = false
-    
-    // MARK: - Form state
-    @State private var username = ""
-    @State private var password = ""
-    @State private var isSubmitting = false
-    @State private var errorMessage = ""
-    
-    // MARK: - Profile data state
+
+    // Profile data
+    @State private var username      = ""
+    @State private var fullName      = ""
+    @State private var bio           = ""
     @State private var profileImageURL: URL?
-    @State private var fullName: String = ""
-    @State private var bio: String = ""
-    @State private var followersCount: Int = 0
-    @State private var followingCount: Int = 0
-    @State private var postsCount: Int = 0
+    @State private var followersCount = 0
+    @State private var followingCount = 0
     @State private var posts: [Post] = []
     @State private var isLoadingProfile = false
+    @State private var errorMessage  = ""
 
-    // MARK: - Edit Profile State
-    @State private var showEditSheet: Bool = false
+    // Extended fields
+    @State private var currentGym    = ""
+    @State private var currentGymLat: Double? = nil
+    @State private var currentGymLon: Double? = nil
+    @State private var workoutSplit  = ""
+    @State private var trainingDays: [String] = []
+    @State private var workoutTimes: [String] = []
+    @State private var savedGyms: [GymDetail] = []
+
+    @State private var workoutStreak  = 0
+
+    // Edit sheet state
+    @State private var showEditSheet  = false
+    @State private var showGymPicker  = false
+    @State private var editFullName   = ""
+    @State private var editBio        = ""
+    @State private var editGym        = ""
+    @State private var editGymLat: Double? = nil
+    @State private var editGymLon: Double? = nil
+    @State private var editSplit      = ""
+    @State private var editDays: [String] = []
+    @State private var editTimes: [String] = []
     @State private var selectedImage: UIImage? = nil
-    @State private var newBio: String = ""
-    @State private var newFullName: String = ""
-    @State private var isUpdatingProfile: Bool = false
-    @State private var showImagePicker: Bool = false
-    
-    @State private var favorites: [RestaurantDetail] = []
+    @State private var showImagePicker = false
+    @State private var isUpdating     = false
 
-    
     private let db = Firestore.firestore()
-    
-    private var formIsValid: Bool {
-        !username.trimmingCharacters(in: .whitespaces).isEmpty &&
-        password.count >= 8
-    }
-    
+
     var body: some View {
         NavigationView {
-            Group {
-                if currentUser == nil {
-                    // MARK: - Login / Signup Form
-                    VStack(spacing: 20) {
-                        Text(isSignUp ? "Sign Up" : "Log In")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                        
-                        TextField("Username", text: $username)
-                            .textContentType(.username)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .padding()
-                            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                        
-                        SecureField("Password (min 8 characters)", text: $password)
-                            .textContentType(.password)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .padding()
-                            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
-                        
-                        if !errorMessage.isEmpty {
-                            Text(errorMessage)
-                                .foregroundColor(.red)
-                                .font(.footnote)
-                                .multilineTextAlignment(.center)
-                                .padding(.top, 4)
-                        }
-                        
-                        Button {
-                            handleAuthAction()
-                        } label: {
-                            HStack {
-                                if isSubmitting { ProgressView().tint(.white) }
-                                Text(isSignUp ? "Create Account" : "Log In")
-                                    .fontWeight(.semibold)
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!formIsValid || isSubmitting)
-                        
-                        Button(isSignUp ? "Already have an account? Log in" : "Need an account? Sign up") {
-                            withAnimation {
-                                isSignUp.toggle()
-                                errorMessage = ""
-                            }
-                        }
-                        .font(.footnote)
-                        .padding(.top, 4)
-                        
-                        Spacer()
-                    }
-                    .padding()
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                if isLoadingProfile {
+                    ProgressView().tint(.gymLinkPink)
                 } else {
-                    // MARK: - Logged In Profile View
                     ScrollView {
-                        VStack(spacing: 16) {
-                            if isLoadingProfile {
-                                ProgressView()
-                                    .padding(.top, 40)
-                            } else {
-                                VStack(spacing: 12) {
-                                    if let url = profileImageURL {
-                                        AsyncImage(url: url) { phase in
-                                            switch phase {
-                                            case .empty:
-                                                ProgressView()
-                                                    .frame(width: 100, height: 100)
-                                            case .success(let image):
-                                                image
-                                                    .resizable()
-                                                    .scaledToFill()
-                                                    .frame(width: 100, height: 100)
-                                                    .clipShape(Circle())
-                                            case .failure:
-                                                Image(systemName: "person.crop.circle.fill")
-                                                    .resizable()
-                                                    .scaledToFit()
-                                                    .frame(width: 100, height: 100)
-                                                    .foregroundColor(.secondary)
-                                            @unknown default:
-                                                EmptyView()
-                                            }
-                                        }
-                                    } else {
-                                        Image(systemName: "person.crop.circle.fill")
-                                            .resizable()
-                                            .scaledToFit()
-                                            .frame(width: 100, height: 100)
-                                            .foregroundColor(.secondary)
-                                    }
-
-                                    Text(fullName.isEmpty ? username : fullName)
-                                        .font(.title)
-                                        .fontWeight(.bold)
-
-                                    if !bio.isEmpty {
-                                        Text(bio)
-                                            .font(.body)
-                                            .multilineTextAlignment(.center)
-                                            .padding(.horizontal)
-                                    }
-
-                                    // MARK: - Edit Profile Button (only for current user's own profile)
-                                    if let loggedInUser = Auth.auth().currentUser,
-                                       loggedInUser.uid == currentUser?.uid {
-                                        Button(action: {
-                                            newFullName = fullName
-                                            newBio = bio
-                                            selectedImage = nil
-                                            showEditSheet = true
-                                        }) {
-                                            Text("Edit Profile")
-                                                .font(.subheadline)
-                                                .fontWeight(.semibold)
-                                                .padding(.horizontal, 24)
-                                                .padding(.vertical, 8)
-                                                .background(Color.accentColor.opacity(0.15))
-                                                .foregroundColor(.accentColor)
-                                                .cornerRadius(20)
-                                        }
-                                        .padding(.top, 4)
-                                    }
-
-                                    HStack(spacing: 40) {
-                                        VStack {
-                                            Text("\(postsCount)")
-                                                .font(.headline)
-                                            Text("Posts")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-                                        VStack {
-                                            Text("\(followersCount)")
-                                                .font(.headline)
-                                            Text("Followers")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-                                        VStack {
-                                            Text("\(followingCount)")
-                                                .font(.headline)
-                                            Text("Following")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                    .padding(.top, 8)
-                                }
-                                .padding(.top, 20)
-
-                                Divider()
-                                    .padding(.vertical, 10)
-
-                                if posts.isEmpty {
-                                    Text("No posts yet.")
-                                        .foregroundColor(.secondary)
-                                        .padding()
-                                } else {
-                                    // MARK: - Posts
-                                    LazyVStack(spacing: 16) {
-                                        ForEach(posts) { post in
-                                            NavigationLink {
-                                                PostDetailView(post: post)
-                                            } label: {
-                                                VStack(alignment: .leading, spacing: 8) {
-
-                                                    // Image
-                                                    if let imageURL = post.imageURL, let url = URL(string: imageURL) {
-                                                        AsyncImage(url: url) { image in
-                                                            image.resizable()
-                                                                .scaledToFill()
-                                                        } placeholder: {
-                                                            ProgressView()
-                                                        }
-                                                        .frame(height: 180)
-                                                        .cornerRadius(10)
-                                                    }
-
-                                                    Text(post.title)
-                                                        .font(.headline)
-
-                                                    Text(post.content)
-                                                        .font(.subheadline)
-                                                        .foregroundColor(.secondary)
-
-                                                    if let rating = post.rating {
-                                                        HStack(spacing: 4) {
-                                                            ForEach(1..<6) { i in
-                                                                Text("🍔")
-                                                                    .font(.system(size: 16))
-                                                                    .opacity(Double(i) <= rating ? 1.0 : 0.3)
-                                                            }
-                                                        }
-                                                    }
-
-                                                    if let currentUID = Auth.auth().currentUser?.uid,
-                                                       post.authorId == currentUID {
-                                                        Button(role: .destructive) {
-                                                            PostManager.shared.deletePost(post) { result in
-                                                                switch result {
-                                                                case .success:
-                                                                    loadUserPosts(uid: currentUID)
-                                                                case .failure(let error):
-                                                                    print("Delete failed:", error.localizedDescription)
-                                                                }
-                                                            }
-                                                        } label: {
-                                                            Label("Delete Post", systemImage: "trash")
-                                                                .font(.subheadline)
-                                                                .padding(.top, 4)
-                                                        }
-                                                    }
-                                                }
-                                                .padding(.horizontal)
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
-                                    }
-                                    
-                                    // MARK: - Favorites Section
-                                    Divider()
-                                        .padding(.vertical, 10)
-
-                                    VStack(alignment: .leading, spacing: 12) {
-                                        
-                                        Text("Saved Restaurants")
-                                            .font(.title3)
-                                            .fontWeight(.semibold)
-                                            .padding(.horizontal)
-
-                                        if favorites.isEmpty {
-                                            Text("You haven't saved any restaurants yet.")
-                                                .foregroundColor(.secondary)
-                                                .padding(.horizontal)
-                                        } else {
-                                            ForEach(favorites, id: \.name) { fav in
-                                                NavigationLink {
-                                                    RestaurantProfileView(restaurant: fav)
-                                                } label: {
-                                                    HStack(spacing: 12) {
-
-                                                        // Small map preview
-                                                        Map (
-                                                            position: .constant(
-                                                                .region(
-                                                                    MKCoordinateRegion(
-                                                                        center: fav.coordinate,
-                                                                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                                                                    )
-                                                                )
-                                                            )
-                                                        ) {
-                                                            
-                                                        }
-                                                        .frame(width: 70, height: 70)
-                                                        .cornerRadius(10)
-
-
-                                                        VStack(alignment: .leading, spacing: 4) {
-                                                            Text(fav.name)
-                                                                .font(.headline)
-                                                            Text(fav.address)
-                                                                .font(.subheadline)
-                                                                .foregroundColor(.secondary)
-                                                        }
-
-                                                        Spacer()
-
-                                                        Image(systemName: "chevron.right")
-                                                            .foregroundColor(.gray)
-                                                    }
-                                                    .padding(.horizontal)
-                                                    .padding(.vertical, 6)
-                                                }
-                                                .buttonStyle(.plain)
-                                            }
-                                        }
-                                    }
-                                    .padding(.bottom, 20)
-
-                                }
-                            }
+                        VStack(spacing: 0) {
+                            profileHeader
+                            statsRow.padding(.top, 20)
+                            infoSections.padding(.top, 16)
+                            postsSection.padding(.top, 20)
+                            savedGymsSection.padding(.top, 20)
                         }
-                        .padding(.bottom, 40)
-                    }
-                    .navigationTitle("Profile")
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("Log Out") {
-                                handleSignOut()
-                            }
-                        }
-                    }
-                    .onAppear {
-                        loadUserProfile()
-                        loadFavorites()
-                    }
-                    // MARK: - Edit Profile Sheet
-                    .sheet(isPresented: $showEditSheet) {
-                        EditProfileSheet
+                        .padding(.bottom, 48)
                     }
                 }
             }
-        }
-    }
-    
-    // MARK: - Auth Flow
-    private func handleAuthAction() {
-        errorMessage = ""
-        guard !username.isEmpty, password.count >= 8 else {
-            errorMessage = "Please enter a valid username and password (min 8 characters)."
-            return
-        }
-        isSubmitting = true
-        
-        if isSignUp {
-            AuthManager.shared.signUp(fullName: "", username: username, bio: "", password: password) { result in
-                DispatchQueue.main.async {
-                    isSubmitting = false
-                    switch result {
-                    case .success(let user):
-                        currentUser = user
-                        loadUserProfile()
-                    case .failure(let error):
-                        errorMessage = error.localizedDescription
+            .preferredColorScheme(.dark)
+            .navigationTitle("My Profile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Sign Out") { _ = AuthManager.shared.signOut() }
+                        .foregroundColor(Color(white: 0.45))
+                        .font(.system(size: 14))
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Edit") {
+                        editFullName = fullName
+                        editBio      = bio
+                        editGym      = currentGym
+                        editGymLat   = currentGymLat
+                        editGymLon   = currentGymLon
+                        editSplit    = workoutSplit
+                        editDays     = trainingDays
+                        editTimes    = workoutTimes
+                        selectedImage = nil
+                        showEditSheet = true
                     }
+                    .foregroundColor(.gymLinkPink)
+                    .fontWeight(.semibold)
                 }
             }
-        } else {
-            AuthManager.shared.signIn(username: username, password: password) { result in
-                DispatchQueue.main.async {
-                    isSubmitting = false
-                    switch result {
-                    case .success(let user):
-                        currentUser = user
-                        loadUserProfile()
-                    case .failure(let error):
-                        errorMessage = error.localizedDescription
-                    }
-                }
-            }
+            .sheet(isPresented: $showEditSheet) { editSheet }
+            .onAppear { loadUserProfile(); loadSavedGyms() }
         }
     }
-    
-    private func handleSignOut() {
-        do {
-            try Auth.auth().signOut()
-            currentUser = nil
-            username = ""
-            password = ""
-            fullName = ""
-            bio = ""
-            followersCount = 0
-            followingCount = 0
-            postsCount = 0
-            posts = []
-            profileImageURL = nil
-        } catch {
-            errorMessage = "Failed to sign out: \(error.localizedDescription)"
-        }
-    }
-    
-    // MARK: - Load Profile Data
-    private func loadUserProfile() {
-        guard let uid = currentUser?.uid else { return }
-        isLoadingProfile = true
-        
-        let userDocRef = db.collection("users").document(uid)
-        userDocRef.getDocument { snapshot, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    isLoadingProfile = false
-                    errorMessage = "Failed to load profile: \(error.localizedDescription)"
-                    return
-                }
-                guard let data = snapshot?.data() else {
-                    isLoadingProfile = false
-                    errorMessage = "User data not found."
-                    return
-                }
-                
-                // Use correct Firestore field keys
-                fullName = data["fullName"] as? String ?? ""
-                bio = data["bio"] as? String ?? ""
-                username = data["username"] as? String ?? username // fallback to previous username
-                postsCount = data["postsCount"] as? Int ?? 0
-                if let profileImageString = data["profilePicURL"] as? String,
-                   !profileImageString.trimmingCharacters(in: .whitespaces).isEmpty,
-                   let url = URL(string: profileImageString) {
 
-                    self.profileImageURL = url
+    // MARK: - Profile header
+    private var profileHeader: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(Color(white: 0.12))
+                    .frame(width: 100, height: 100)
+                    .overlay(Circle().stroke(Color.gymLinkPink.opacity(0.5), lineWidth: 2))
 
+                if let url = profileImageURL {
+                    AsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                        placeholder: { avatarPlaceholder }
+                        .frame(width: 96, height: 96).clipShape(Circle())
                 } else {
-                    self.profileImageURL = nil   //
+                    avatarPlaceholder
                 }
+            }
+            .padding(.top, 24)
 
-                
-                // Fetch followers count from subcollection
-                let followersRef = db.collection("users").document(uid).collection("followers")
-                followersRef.getDocuments { followersSnapshot, _ in
-                    followersCount = followersSnapshot?.documents.count ?? 0
-                    
-                    // Fetch following count from subcollection
-                    let followingRef = db.collection("users").document(uid).collection("following")
-                    followingRef.getDocuments { followingSnapshot, _ in
-                        followingCount = followingSnapshot?.documents.count ?? 0
-                        isLoadingProfile = false
-                        // Now load posts
-                        loadUserPosts(uid: uid)
+            Text(fullName.isEmpty ? username : fullName)
+                .font(.system(size: 22, weight: .bold)).foregroundColor(.white)
+
+            if !username.isEmpty {
+                Text("@\(username)")
+                    .font(.subheadline).foregroundColor(Color(white: 0.45))
+            }
+
+            if !bio.isEmpty {
+                Text(bio)
+                    .font(.subheadline).foregroundColor(Color(white: 0.55))
+                    .multilineTextAlignment(.center).padding(.horizontal, 24)
+            }
+
+            if workoutStreak >= 2 {
+                HStack(spacing: 6) {
+                    Text("🔥")
+                        .font(.system(size: 16))
+                    Text("\(workoutStreak)-day streak")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(Color(red: 1.0, green: 0.5, blue: 0.1))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .background(Color(red: 1.0, green: 0.5, blue: 0.1).opacity(0.12))
+                .cornerRadius(20)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var avatarPlaceholder: some View {
+        Image(systemName: "person.fill")
+            .font(.system(size: 38)).foregroundColor(Color(white: 0.38))
+    }
+
+    // MARK: - Stats row
+    private var statsRow: some View {
+        HStack(spacing: 0) {
+            statItem(value: "\(posts.count)", label: "Posts")
+            Divider().frame(height: 28).background(Color(white: 0.2))
+            statItem(value: "\(followersCount)", label: "Followers")
+            Divider().frame(height: 28).background(Color(white: 0.2))
+            statItem(value: "\(followingCount)", label: "Following")
+        }
+        .padding(.vertical, 14)
+        .background(Color(white: 0.09))
+        .cornerRadius(16)
+        .padding(.horizontal, 20)
+    }
+
+    private func statItem(value: String, label: String) -> some View {
+        VStack(spacing: 3) {
+            Text(value).font(.system(size: 18, weight: .bold)).foregroundColor(.white)
+            Text(label).font(.caption).foregroundColor(Color(white: 0.45))
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Info sections
+    @ViewBuilder
+    private var infoSections: some View {
+        VStack(spacing: 10) {
+            // Current gym
+            profileCard(icon: "mappin.and.ellipse", title: "Currently Training At") {
+                if currentGym.isEmpty {
+                    Text("Not set — tap Edit to add")
+                        .font(.subheadline).foregroundColor(Color(white: 0.35))
+                } else {
+                    Text(currentGym)
+                        .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                }
+            }
+
+            // Workout split
+            profileCard(icon: "dumbbell.fill", title: "Workout Split") {
+                if workoutSplit.isEmpty {
+                    Text("Not set — tap Edit to add")
+                        .font(.subheadline).foregroundColor(Color(white: 0.35))
+                } else {
+                    Text(workoutSplit)
+                        .font(.system(size: 15, weight: .semibold)).foregroundColor(.gymLinkPink)
+                }
+            }
+
+            // Training days
+            profileCard(icon: "calendar", title: "Training Days") {
+                HStack(spacing: 6) {
+                    ForEach(weekDays, id: \.self) { day in
+                        let active = trainingDays.contains(day)
+                        Text(String(day.prefix(1)))
+                            .font(.system(size: 12, weight: active ? .bold : .regular))
+                            .foregroundColor(active ? .white : Color(white: 0.32))
+                            .frame(width: 30, height: 30)
+                            .background(active ? Color.gymLinkPink : Color(white: 0.14))
+                            .clipShape(Circle())
+                    }
+                    if trainingDays.isEmpty {
+                        Text("Not set — tap Edit to add")
+                            .font(.caption).foregroundColor(Color(white: 0.35))
+                    }
+                }
+            }
+
+            // Workout times
+            profileCard(icon: "clock.fill", title: "Workout Times") {
+                if workoutTimes.isEmpty {
+                    Text("Not set — tap Edit to add")
+                        .font(.subheadline).foregroundColor(Color(white: 0.35))
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(workoutTimes, id: \.self) { slot in
+                            HStack(spacing: 6) {
+                                Image(systemName: "clock.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.gymLinkPink)
+                                Text(slot)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                        }
                     }
                 }
             }
         }
+        .padding(.horizontal, 20)
     }
-    
-    private func loadFavorites() {
-        FavoriteManager.shared.fetchFavorites { list in
-            DispatchQueue.main.async {
-                self.favorites = list
+
+    private func profileCard<Content: View>(icon: String, title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 12, weight: .semibold)).foregroundColor(.gymLinkPink)
+                Text(title).font(.system(size: 12, weight: .semibold)).foregroundColor(Color(white: 0.45))
+            }
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color(white: 0.09))
+        .cornerRadius(14)
+    }
+
+    // MARK: - Posts section
+    private var postsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Posts")
+                .font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                .padding(.horizontal, 20)
+
+            if posts.isEmpty {
+                Text("No posts yet")
+                    .font(.subheadline).foregroundColor(Color(white: 0.35))
+                    .frame(maxWidth: .infinity).padding(.top, 8)
+            } else {
+                LazyVStack(spacing: 10) {
+                    ForEach(posts) { post in
+                        NavigationLink { PostDetailView(post: post) } label: {
+                            darkPostCard(post: post)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            if let uid = currentUser?.uid, post.authorId == uid {
+                                Button(role: .destructive) {
+                                    PostManager.shared.deletePost(post) { _ in loadUserPosts(uid: uid) }
+                                } label: { Label("Delete Post", systemImage: "trash") }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
             }
         }
     }
 
-    
-    private func loadUserPosts(uid: String) {
-        db.collection("posts")
-            .whereField("authorId", isEqualTo: uid)
-            .order(by: "timestamp", descending: true)
-            .getDocuments { snapshot, error in
-                DispatchQueue.main.async {
-                    if let error = error {
-                        self.errorMessage = "Failed to load posts: \(error.localizedDescription)"
-                        self.posts = []
-                        return
+    private func darkPostCard(post: Post) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let urlStr = post.imageURL, !urlStr.isEmpty, let url = URL(string: urlStr) {
+                AsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                    placeholder: { Color(white: 0.1) }
+                    .frame(height: 160).clipped().cornerRadius(12)
+            }
+            Text(post.title)
+                .font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+            if !post.content.isEmpty {
+                Text(post.content)
+                    .font(.subheadline).foregroundColor(Color(white: 0.5)).lineLimit(2)
+            }
+        }
+        .padding(14)
+        .background(Color(white: 0.09))
+        .cornerRadius(16)
+    }
+
+    // MARK: - Saved gyms section
+    private var savedGymsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Saved Gyms")
+                .font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                .padding(.horizontal, 20)
+
+            if savedGyms.isEmpty {
+                Text("No saved gyms yet")
+                    .font(.subheadline).foregroundColor(Color(white: 0.35))
+                    .frame(maxWidth: .infinity).padding(.top, 8)
+            } else {
+                LazyVStack(spacing: 10) {
+                    ForEach(savedGyms, id: \.name) { gym in
+                        NavigationLink { GymProfileView(gym: gym) } label: {
+                            HStack(spacing: 12) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color.gymLinkPink.opacity(0.15))
+                                        .frame(width: 46, height: 46)
+                                    Image(systemName: "mappin.and.ellipse")
+                                        .foregroundColor(.gymLinkPink)
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(gym.name).font(.system(size: 15, weight: .semibold)).foregroundColor(.white)
+                                    Text(gym.address).font(.caption).foregroundColor(Color(white: 0.45)).lineLimit(1)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.system(size: 12)).foregroundColor(Color(white: 0.25))
+                            }
+                            .padding(14)
+                            .background(Color(white: 0.09))
+                            .cornerRadius(14)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    
-                    let fetchedPosts = snapshot?.documents.compactMap { doc -> Post? in
-                        let data = doc.data()
-                        return Post(
-                            id: doc.documentID,
-                            title: data["title"] as? String ?? "",
-                            content: data["content"] as? String ?? "",
-                            imageURL: data["imageURL"] as? String,
-                            author: data["author"] as? String ?? "",
-                            authorId: data["authorId"] as? String ?? "",
-                            restaurant: data["restaurant"] as? String,
-                            rating: data["rating"] as? Double ?? 0.0,
-                            timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date()
-                        )
-                    } ?? []
-                    
-                    // 🟡 Fallback: if no posts found by UID, try fetching by author name
-                    if fetchedPosts.isEmpty {
-                        self.db.collection("posts")
-                            .whereField("author", isEqualTo: self.username)
-                            .order(by: "timestamp", descending: true)
-                            .getDocuments { snap, err in
-                                DispatchQueue.main.async {
-                                    if let err = err {
-                                        self.errorMessage = "Failed to load posts by username: \(err.localizedDescription)"
-                                        self.posts = []
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+
+    // MARK: - Edit sheet
+    private var editSheet: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                ScrollView {
+                    VStack(spacing: 16) {
+                        // Profile photo
+                        ZStack(alignment: .bottomTrailing) {
+                            Group {
+                                if let img = selectedImage {
+                                    Image(uiImage: img).resizable().scaledToFill()
+                                        .frame(width: 90, height: 90).clipShape(Circle())
+                                } else if let url = profileImageURL {
+                                    AsyncImage(url: url) { img in img.resizable().scaledToFill() }
+                                        placeholder: { Color(white: 0.15) }
+                                        .frame(width: 90, height: 90).clipShape(Circle())
+                                } else {
+                                    Circle().fill(Color(white: 0.15)).frame(width: 90, height: 90)
+                                        .overlay(Image(systemName: "person.fill").foregroundColor(Color(white: 0.4)).font(.system(size: 32)))
+                                }
+                            }
+                            .overlay(Circle().stroke(Color.gymLinkPink.opacity(0.5), lineWidth: 2))
+
+                            Button { showImagePicker = true } label: {
+                                Image(systemName: "camera.circle.fill")
+                                    .font(.system(size: 26)).foregroundColor(.gymLinkPink)
+                                    .background(Circle().fill(Color.black).padding(2))
+                            }
+                        }
+                        .frame(width: 90, height: 90)
+                        .padding(.top, 16)
+
+                        // Name & bio
+                        editSection(title: "ABOUT") {
+                            editField(icon: "person.fill", placeholder: "Full name", text: $editFullName)
+                            editField(icon: "text.quote", placeholder: "Bio", text: $editBio, multiline: true)
+                        }
+
+                        // Current gym
+                        editSection(title: "CURRENT GYM") {
+                            Button { showGymPicker = true } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "mappin.and.ellipse").foregroundColor(.gymLinkPink).frame(width: 22)
+                                    Text(editGym.isEmpty ? "Pick a gym from the map" : editGym)
+                                        .foregroundColor(editGym.isEmpty ? Color(white: 0.38) : .white)
+                                    Spacer()
+                                    if !editGym.isEmpty {
+                                        Button { editGym = ""; editGymLat = nil; editGymLon = nil } label: {
+                                            Image(systemName: "xmark").font(.system(size: 11, weight: .bold)).foregroundColor(Color(white: 0.38))
+                                        }
                                     } else {
-                                        self.posts = snap?.documents.compactMap { doc -> Post? in
-                                            let data = doc.data()
-                                            return Post(
-                                                id: doc.documentID,
-                                                title: data["title"] as? String ?? "",
-                                                content: data["content"] as? String ?? "",
-                                                imageURL: data["imageURL"] as? String,
-                                                author: data["author"] as? String ?? "",
-                                                authorId: data["authorId"] as? String ?? "",
-                                                restaurant: data["restaurant"] as? String,
-                                                rating: data["rating"] as? Double ?? 0.0,
-                                                timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date()
+                                        Image(systemName: "chevron.right").font(.system(size: 12)).foregroundColor(Color(white: 0.28))
+                                    }
+                                }
+                                .padding(14)
+                                .background(Color(white: 0.11))
+                                .cornerRadius(14)
+                            }
+                            .buttonStyle(.plain)
+                        }
+
+                        // Workout split
+                        editSection(title: "WORKOUT SPLIT") {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(workoutSplits, id: \.self) { s in
+                                        PostChip(label: s, isSelected: editSplit == s) { editSplit = s }
+                                    }
+                                }
+                                .padding(.horizontal, 1).padding(.vertical, 2)
+                            }
+                        }
+
+                        // Training days
+                        editSection(title: "TRAINING DAYS") {
+                            HStack(spacing: 8) {
+                                ForEach(weekDays, id: \.self) { day in
+                                    let on = editDays.contains(day)
+                                    Button {
+                                        if on { editDays.removeAll { $0 == day } } else { editDays.append(day) }
+                                    } label: {
+                                        Text(String(day.prefix(1)))
+                                            .font(.system(size: 13, weight: on ? .bold : .regular))
+                                            .foregroundColor(on ? .white : Color(white: 0.38))
+                                            .frame(width: 36, height: 36)
+                                            .background(on ? Color.gymLinkPink : Color(white: 0.14))
+                                            .clipShape(Circle())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        // Workout times
+                        editSection(title: "WORKOUT TIMES") {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("When do you usually train?")
+                                    .font(.caption)
+                                    .foregroundColor(Color(white: 0.42))
+                                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                                    ForEach(WorkoutTimeSlots.all, id: \.self) { slot in
+                                        let on = editTimes.contains(slot)
+                                        Button {
+                                            if on { editTimes.removeAll { $0 == slot } } else { editTimes.append(slot) }
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                                                    .font(.system(size: 14))
+                                                    .foregroundColor(on ? .gymLinkPink : Color(white: 0.3))
+                                                Text(slot)
+                                                    .font(.system(size: 11, weight: on ? .semibold : .regular))
+                                                    .foregroundColor(on ? .white : Color(white: 0.5))
+                                                    .lineLimit(2)
+                                                    .multilineTextAlignment(.leading)
+                                                Spacer()
+                                            }
+                                            .padding(10)
+                                            .background(on ? Color.gymLinkPink.opacity(0.15) : Color(white: 0.11))
+                                            .cornerRadius(10)
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .stroke(on ? Color.gymLinkPink.opacity(0.4) : Color.clear, lineWidth: 1)
                                             )
-                                        } ?? []
-                                        self.postsCount = self.posts.count
+                                        }
+                                        .buttonStyle(.plain)
+                                        .animation(.easeInOut(duration: 0.12), value: on)
                                     }
                                 }
                             }
-                    } else {
-                        self.posts = fetchedPosts
-                        self.postsCount = fetchedPosts.count
+                        }
 
-                    }
-                }
-            }
-    }
-    
-    // MARK: - Edit Profile Sheet
-    private var EditProfileSheet: some View {
-        NavigationView {
-            VStack(spacing: 24) {
-                // Profile Image Picker
-                ZStack(alignment: .bottomTrailing) {
-
-                    // Current or newly-selected profile image
-                    Group {
-                        if let selectedImage = selectedImage {
-                            Image(uiImage: selectedImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 100, height: 100)
-                                .clipShape(Circle())
-                        } else if let url = profileImageURL {
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case .empty:
-                                    ProgressView()
-                                        .frame(width: 100, height: 100)
-                                case .success(let image):
-                                    image.resizable()
-                                        .scaledToFill()
-                                        .frame(width: 100, height: 100)
-                                        .clipShape(Circle())
-                                default:
-                                    Image(systemName: "person.crop.circle.fill")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 100, height: 100)
-                                        .foregroundColor(.secondary)
+                        // Save
+                        Button(action: saveProfile) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color.gymLinkPink)
+                                    .frame(height: 52)
+                                    .shadow(color: Color.gymLinkPink.opacity(0.4), radius: 10, y: 4)
+                                if isUpdating {
+                                    ProgressView().tint(.white)
+                                } else {
+                                    Text("Save Changes")
+                                        .font(.headline).foregroundColor(.white)
                                 }
                             }
-                        } else {
-                            Image(systemName: "person.crop.circle.fill")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 100, height: 100)
-                                .foregroundColor(.secondary)
                         }
+                        .disabled(isUpdating)
+                        .padding(.top, 8)
                     }
-
-                    // Pencil Button (opens image picker)
-                    Button {
-                        showImagePicker = true
-                    } label: {
-                        Image(systemName: "pencil.circle.fill")
-                            .font(.system(size: 26))
-                            .foregroundColor(.blue)
-                            .padding(4)
-                            .background(.white)
-                            .clipShape(Circle())
-                            .shadow(radius: 2)
-                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 36)
                 }
-                .frame(width: 100, height: 100)
-                .padding(.top, 24)
-
-                // Full Name
-                TextField("Full Name", text: $newFullName)
-                    .textContentType(.name)
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(10)
-                    .padding(.horizontal)
-
-                // Bio
-                VStack(alignment: .leading) {
-                    Text("Bio")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    TextEditor(text: $newBio)
-                        .frame(height: 80)
-                        .padding(6)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(10)
-                }
-                .padding(.horizontal)
-
-                // Save Changes Button
-                Button(action: {
-                    updateProfile()
-                }) {
-                    HStack {
-                        if isUpdatingProfile { ProgressView().tint(.white) }
-                        Text("Save Changes")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isUpdatingProfile)
-                .padding(.horizontal)
-
-                Spacer()
             }
+            .preferredColorScheme(.dark)
             .navigationTitle("Edit Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        showEditSheet = false
-                    }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { showEditSheet = false }
+                        .foregroundColor(.gymLinkPink)
                 }
             }
-            .sheet(isPresented: $showImagePicker) {
-                ImagePicker(image: $selectedImage)
+            .sheet(isPresented: $showImagePicker) { ImagePicker(image: $selectedImage) }
+            .fullScreenCover(isPresented: $showGymPicker) {
+                MapWidgetView { detail in
+                    editGym    = detail.name
+                    editGymLat = detail.coordinate.latitude
+                    editGymLon = detail.coordinate.longitude
+                    showGymPicker = false
+                }
             }
         }
     }
 
-    // MARK: - Update Profile Function
-    private func updateProfile() {
-        guard let uid = currentUser?.uid else { return }
-        isUpdatingProfile = true
-        var fieldsToUpdate: [String: Any] = [
-            "fullName": newFullName,
-            "bio": newBio
-        ]
+    private func editSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(Color(white: 0.38))
+                .padding(.leading, 2)
+            content()
+        }
+    }
 
-        func finishUpdate(with imageURL: String?) {
-            if let imageURL = imageURL {
-                fieldsToUpdate["profilePicURL"] = imageURL
+    private func editField(icon: String, placeholder: String, text: Binding<String>, multiline: Bool = false) -> some View {
+        HStack(alignment: multiline ? .top : .center, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.gymLinkPink)
+                .frame(width: 22)
+                .padding(.top, multiline ? 2 : 0)
+            if multiline {
+                TextField(placeholder, text: text, axis: .vertical)
+                    .lineLimit(3, reservesSpace: true)
+                    .foregroundColor(.white)
+            } else {
+                TextField(placeholder, text: text)
+                    .foregroundColor(.white)
             }
-            db.collection("users").document(uid).updateData(fieldsToUpdate) { error in
-                DispatchQueue.main.async {
-                    isUpdatingProfile = false
-                    if let error = error {
-                        errorMessage = "Failed to update profile: \(error.localizedDescription)"
-                    } else {
-                        fullName = newFullName
-                        bio = newBio
-                        if let imageURL = imageURL {
-                            profileImageURL = URL(string: imageURL)
-                        } else {
-                            // fallback
-                            profileImageURL = profileImageURL
-                        }
+        }
+        .padding(14)
+        .background(Color(white: 0.11))
+        .cornerRadius(14)
+    }
 
-                        showEditSheet = false
-                    }
+    // MARK: - Data loading
+    private func loadUserProfile() {
+        guard let uid = currentUser?.uid else { return }
+        isLoadingProfile = true
+        db.collection("users").document(uid).getDocument { snap, _ in
+            guard let data = snap?.data() else {
+                DispatchQueue.main.async { isLoadingProfile = false }
+                return
+            }
+            DispatchQueue.main.async {
+                fullName     = data["fullName"] as? String ?? ""
+                bio          = data["bio"] as? String ?? ""
+                username     = data["username"] as? String ?? ""
+                currentGym   = data["currentGym"] as? String ?? ""
+                currentGymLat = data["currentGymLat"] as? Double
+                currentGymLon = data["currentGymLon"] as? Double
+                workoutSplit = data["workoutSplit"] as? String ?? ""
+                trainingDays = data["trainingDays"] as? [String] ?? []
+                workoutTimes = data["workoutTimes"] as? [String] ?? []
+                if let s = data["profilePicURL"] as? String, !s.isEmpty, let url = URL(string: s) {
+                    profileImageURL = url
+                }
+                let metrics = data["metrics"] as? [String: Any]
+                let streakA = metrics?["currentStreak"] as? Int ?? 0
+                let streakB = data["workoutStreak"] as? Int ?? 0
+                workoutStreak = max(streakA, streakB)
+            }
+            // Followers
+            let followRef = self.db.collection("users").document(uid)
+            followRef.collection("followers").getDocuments { snap, _ in
+                DispatchQueue.main.async { followersCount = snap?.count ?? 0 }
+            }
+            followRef.collection("following").getDocuments { snap, _ in
+                DispatchQueue.main.async { followingCount = snap?.count ?? 0 }
+                self.loadUserPosts(uid: uid)
+            }
+        }
+    }
+
+    private func loadUserPosts(uid: String) {
+        db.collection("posts")
+            .whereField("authorId", isEqualTo: uid)
+            .getDocuments { snap, error in
+                if let error { print("loadUserPosts error:", error.localizedDescription) }
+                let fetched = (snap?.documents.compactMap { doc -> Post? in
+                    let d = doc.data()
+                    return Post(id: doc.documentID,
+                                title: d["title"] as? String ?? "",
+                                content: d["content"] as? String ?? "",
+                                imageURL: d["imageURL"] as? String,
+                                author: d["author"] as? String ?? "",
+                                authorId: d["authorId"] as? String ?? "",
+                                gym: d["gym"] as? String,
+                                rating: d["rating"] as? Double ?? 0,
+                                timestamp: (d["timestamp"] as? Timestamp)?.dateValue() ?? Date())
+                } ?? []).sorted { $0.timestamp > $1.timestamp }
+                DispatchQueue.main.async {
+                    posts = fetched
+                    isLoadingProfile = false
+                }
+            }
+    }
+
+    private func loadSavedGyms() {
+        SavedManager.shared.fetchSaveds { list in
+            DispatchQueue.main.async { savedGyms = list }
+        }
+    }
+
+    // MARK: - Save profile
+    private func saveProfile() {
+        guard let uid = currentUser?.uid else { return }
+        isUpdating = true
+
+        func persist(imageURL: String?) {
+            var patch: [String: Any] = [
+                "fullName":     editFullName,
+                "bio":          editBio,
+                "currentGym":   editGym,
+                "workoutSplit": editSplit,
+                "trainingDays": editDays,
+                "workoutTimes": editTimes
+            ]
+            if let lat = editGymLat { patch["currentGymLat"] = lat }
+            if let lon = editGymLon { patch["currentGymLon"] = lon }
+            if let url = imageURL   { patch["profilePicURL"] = url }
+
+            print("[ProfileSave] Writing to Firestore, imageURL: \(imageURL ?? "nil")")
+            db.collection("users").document(uid).setData(patch, merge: true) { err in
+                if let err = err { print("[ProfileSave] Firestore write error: \(err)") }
+                else { print("[ProfileSave] Firestore write succeeded") }
+                DispatchQueue.main.async {
+                    isUpdating    = false
+                    fullName      = editFullName
+                    bio           = editBio
+                    currentGym    = editGym
+                    currentGymLat = editGymLat
+                    currentGymLon = editGymLon
+                    workoutSplit  = editSplit
+                    trainingDays  = editDays
+                    workoutTimes  = editTimes
+                    if let url = imageURL { profileImageURL = URL(string: url) }
+                    showEditSheet = false
                 }
             }
         }
 
-        // If a new image is selected, upload to Firebase Storage
-        if let image = selectedImage, let imageData = image.jpegData(compressionQuality: 0.8) {
-            let storageRef = Storage.storage().reference().child("profilePictures/\(uid).jpg")
-            storageRef.putData(imageData, metadata: nil) { metadata, error in
-                if let error = error {
-                    DispatchQueue.main.async {
-                        isUpdatingProfile = false
-                        errorMessage = "Failed to upload image: \(error.localizedDescription)"
-                    }
-                    return
-                }
-                storageRef.downloadURL { url, error in
-                    if let error = error {
-                        DispatchQueue.main.async {
-                            isUpdatingProfile = false
-                            errorMessage = "Failed to get image URL: \(error.localizedDescription)"
-                        }
+        if let img = selectedImage, let data = img.jpegData(compressionQuality: 0.8) {
+            print("[ProfileSave] Starting upload for uid: \(uid), dataSize: \(data.count)")
+            let ref = Storage.storage().reference().child("profilePictures/\(uid).jpg")
+            let task = ref.putData(data, metadata: nil)
+
+            task.observe(.success) { _ in
+                print("[ProfileSave] Upload succeeded, fetching downloadURL")
+                ref.downloadURL { url, urlErr in
+                    if let urlErr = urlErr {
+                        print("[ProfileSave] downloadURL error: \(urlErr)")
+                        DispatchQueue.main.async { isUpdating = false }
                         return
                     }
-                    finishUpdate(with: url?.absoluteString)
+                    guard let url = url else {
+                        print("[ProfileSave] downloadURL returned nil with no error")
+                        DispatchQueue.main.async { isUpdating = false }
+                        return
+                    }
+                    print("[ProfileSave] Got downloadURL: \(url), calling persist")
+                    persist(imageURL: url.absoluteString)
+                }
+            }
+
+            task.observe(.failure) { snapshot in
+                let err = snapshot.error as NSError?
+                print("[ProfileSave] Upload failed — domain: \(err?.domain ?? "nil"), code: \(err?.code ?? -1), msg: \(err?.localizedDescription ?? "nil")")
+                guard let err = err,
+                      err.domain == "com.google.HTTPStatus",
+                      err.code == 400 else {
+                    DispatchQueue.main.async { isUpdating = false }
+                    return
+                }
+                print("[ProfileSave] Already-finalized 400 — fetching downloadURL anyway")
+                ref.downloadURL { url, urlErr in
+                    if let urlErr = urlErr {
+                        print("[ProfileSave] downloadURL (after 400) error: \(urlErr)")
+                        DispatchQueue.main.async { isUpdating = false }
+                        return
+                    }
+                    guard let url = url else {
+                        print("[ProfileSave] downloadURL (after 400) returned nil")
+                        DispatchQueue.main.async { isUpdating = false }
+                        return
+                    }
+                    print("[ProfileSave] Got downloadURL after 400: \(url), calling persist")
+                    persist(imageURL: url.absoluteString)
                 }
             }
         } else {
-            finishUpdate(with: profileImageURL?.absoluteString)
-
-
+            print("[ProfileSave] No image selected, persisting profile only")
+            persist(imageURL: nil)
         }
+    }
+
+    private func handleSignOut() {
+        _ = AuthManager.shared.signOut()
     }
 }
 
-
-// MARK: - UIKit Image Picker Wrapper
+// MARK: - UIKit Image Picker
 struct ImagePicker: UIViewControllerRepresentable {
     @Binding var image: UIImage?
     @Environment(\.presentationMode) private var presentationMode
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.delegate = context.coordinator
-        picker.allowsEditing = true
-        return picker
+        let p = UIImagePickerController(); p.delegate = context.coordinator; p.allowsEditing = true; return p
     }
 
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
 
     class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
         let parent: ImagePicker
-        init(_ parent: ImagePicker) {
-            self.parent = parent
-        }
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            if let uiImage = info[.editedImage] as? UIImage ?? info[.originalImage] as? UIImage {
-                parent.image = uiImage
-            }
+        init(_ parent: ImagePicker) { self.parent = parent }
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            parent.image = info[.editedImage] as? UIImage ?? info[.originalImage] as? UIImage
             parent.presentationMode.wrappedValue.dismiss()
         }
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            parent.presentationMode.wrappedValue.dismiss()
-        }
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) { parent.presentationMode.wrappedValue.dismiss() }
     }
 }
-

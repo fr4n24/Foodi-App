@@ -61,8 +61,8 @@ struct SavedPostsView: View {
                                         .foregroundColor(.secondary)
                                         .lineLimit(2)
                                     
-                                    if let restaurant = post.restaurant, !restaurant.isEmpty {
-                                        Text("📍 \(restaurant)")
+                                    if let gym = post.gym, !gym.isEmpty {
+                                        Text("📍 \(gym)")
                                             .font(.caption)
                                             .foregroundColor(.foodiBlue)
                                             .lineLimit(1)
@@ -123,7 +123,7 @@ struct SavedPostsView: View {
                                 imageURL: data["imageURL"] as? String,
                                 author: data["author"] as? String ?? "",
                                 authorId: data["authorId"] as? String ?? "",
-                                restaurant: data["restaurant"] as? String,
+                                gym: data["gym"] as? String,
                                 rating: data["rating"] as? Double ?? 0.0,
                                 timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date()
                             )

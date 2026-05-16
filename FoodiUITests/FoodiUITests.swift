@@ -1,13 +1,13 @@
 //
-//  FoodiUITests.swift
-//  FoodiUITests
+//  GymLinkUITests.swift
+//  GymLinkUITests
 //
 //  Created by Francisco Campa on 9/22/25.
 //
 
 import XCTest
 
-final class FoodiUITests: XCTestCase {
+final class GymLinkUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

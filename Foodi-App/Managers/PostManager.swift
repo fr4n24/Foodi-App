@@ -12,13 +12,23 @@ struct Post: Identifiable, Codable {
     var imageURL: String?
     var author: String
     var authorId: String
-    var restaurantName: String?
-    var restaurant: String?
+    var gymName: String?
+    var gym: String?
     var rating: Double?
     var timestamp: Date
-    var restaurantLat: Double?
-    var restaurantLon: Double?
-
+    var gymLat: Double?
+    var gymLon: Double?
+    // Meal macros
+    var mealCalories: Int? = nil
+    var mealProtein: Int? = nil
+    var mealCarbs: Int? = nil
+    var mealFat: Int? = nil
+    // Workout progression
+    var exerciseName: String? = nil
+    var previousValue: Double? = nil
+    var newValue: Double? = nil
+    var progressionUnit: String? = nil
+    var category: String?
 }
 
 // MARK: - Comment Model
@@ -38,58 +48,75 @@ class PostManager {
     
     // MARK: - Add Post
     func addPost(
-            title: String,
-            content: String,
-            imageURL: String? = nil,
-            restaurant: String? = nil,
-            rating: Double? = nil,
-            restaurantLat: Double? = nil,
-            restaurantLon: Double? = nil,
-            foodType: String? = nil,
-            completion: @escaping (Result<Void, Error>) -> Void
-        ) {
-            guard let user = Auth.auth().currentUser else {
-                return completion(.failure(NSError(
-                    domain: "",
-                    code: 401,
-                    userInfo: [NSLocalizedDescriptionKey: "User not logged in."]
-                )))
+        title: String,
+        content: String,
+        imageURL: String? = nil,
+        gym: String? = nil,
+        rating: Double? = nil,
+        gymLat: Double? = nil,
+        gymLon: Double? = nil,
+        category: String? = nil,
+        foodType: String? = nil,
+        mealCalories: Int? = nil,
+        mealProtein: Int? = nil,
+        mealCarbs: Int? = nil,
+        mealFat: Int? = nil,
+        exerciseName: String? = nil,
+        previousValue: Double? = nil,
+        newValue: Double? = nil,
+        progressionUnit: String? = nil,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        guard let user = Auth.auth().currentUser else {
+            return completion(.failure(NSError(
+                domain: "", code: 401,
+                userInfo: [NSLocalizedDescriptionKey: "User not logged in."]
+            )))
+        }
+
+        let userRef = db.collection("users").document(user.uid)
+        userRef.getDocument { snapshot, _ in
+            var displayName = "Unknown User"
+            if let data = snapshot?.data(),
+               let username = data["username"] as? String {
+                displayName = username
             }
-            
-            let userRef = db.collection("users").document(user.uid)
-            userRef.getDocument { snapshot, _ in
-                var displayName = "Unknown User"
-                if let data = snapshot?.data(),
-                   let username = data["username"] as? String {
-                    displayName = username
+
+            var postData: [String: Any] = [
+                "title":     title,
+                "content":   content,
+                "imageURL":  imageURL ?? "",
+                "author":    displayName,
+                "authorId":  user.uid,
+                "gym":       gym ?? "",
+                "rating":    rating ?? 0.0,
+                "gymLat":    gymLat ?? NSNull(),
+                "gymLon":    gymLon ?? NSNull(),
+                "category":  category ?? "workout",
+                "foodType":  foodType ?? "",
+                "timestamp": Timestamp(date: Date())
+            ]
+            if let v = mealCalories   { postData["mealCalories"]   = v }
+            if let v = mealProtein    { postData["mealProtein"]    = v }
+            if let v = mealCarbs      { postData["mealCarbs"]      = v }
+            if let v = mealFat        { postData["mealFat"]        = v }
+            if let v = exerciseName   { postData["exerciseName"]   = v }
+            if let v = previousValue  { postData["previousValue"]  = v }
+            if let v = newValue       { postData["newValue"]       = v }
+            if let v = progressionUnit { postData["progressionUnit"] = v }
+
+            self.db.collection("posts").addDocument(data: postData) { error in
+                if let error = error {
+                    completion(.failure(error))
+                    return
                 }
-                
-                let postData: [String: Any] = [
-                    "title": title,
-                    "content": content,
-                    "imageURL": imageURL ?? "",
-                    "author": displayName,
-                    "authorId": user.uid,
-                    "restaurant": restaurant ?? "",
-                    "rating": rating ?? 0.0,
-                    "restaurantLat": restaurantLat ?? NSNull(),
-                    "restaurantLon": restaurantLon ?? NSNull(),
-                    "foodType": foodType ?? "",
-                    "timestamp": Timestamp(date: Date())
-                ]
-                
-                self.db.collection("posts").addDocument(data: postData) { error in
-                    if let error = error {
-                        completion(.failure(error))
-                        return
-                    }
-                    
-                    // +10 when a post is created
-                    ScoreService.shared.bumpOnPostCreated(actorUid: user.uid)
-                    
-                    completion(.success(()))
+                ScoreService.shared.bumpOnPostCreated(actorUid: user.uid)
+                if category == "workout" {
+                    self.updateWorkoutStreak(for: user.uid)
                 }
+                completion(.success(()))
             }
+        }
     }
     
     // MARK: - Fetch Posts
@@ -113,15 +140,24 @@ class PostManager {
                         imageURL: data["imageURL"] as? String,
                         author: data["author"] as? String ?? "",
                         authorId: data["authorId"] as? String ?? "",
-                        restaurantName: data["restaurantName"] as? String ?? "",
-                        restaurant: data["restaurant"] as? String ?? "",
+                        gymName: data["gymName"] as? String ?? "",
+                        gym: data["gym"] as? String ?? "",
                         rating: data["rating"] as? Double ?? 0.0,
                         timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
-                        restaurantLat: data["restaurantLat"] as? Double,
-                        restaurantLon: data["restaurantLon"] as? Double
+                        gymLat: data["gymLat"] as? Double,
+                        gymLon: data["gymLon"] as? Double,
+                        mealCalories: data["mealCalories"] as? Int,
+                        mealProtein: data["mealProtein"] as? Int,
+                        mealCarbs: data["mealCarbs"] as? Int,
+                        mealFat: data["mealFat"] as? Int,
+                        exerciseName: data["exerciseName"] as? String,
+                        previousValue: data["previousValue"] as? Double,
+                        newValue: data["newValue"] as? Double,
+                        progressionUnit: data["progressionUnit"] as? String,
+                        category: data["category"] as? String
                     )
                 }
-                
+
                 completion(posts)
             }
     }
@@ -153,22 +189,29 @@ class PostManager {
                             imageURL: data["imageURL"] as? String,
                             author: data["author"] as? String ?? "",
                             authorId: data["authorId"] as? String ?? "",
-                            restaurantName: data["restaurant"] as? String,
-                            restaurant: data["restaurant"] as? String,
+                            gymName: data["gym"] as? String,
+                            gym: data["gym"] as? String,
                             rating: data["rating"] as? Double ?? 0.0,
                             timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
-                            restaurantLat: data["restaurantLat"] as? Double,
-                            restaurantLon: data["restaurantLon"] as? Double
+                            gymLat: data["gymLat"] as? Double,
+                            gymLon: data["gymLon"] as? Double,
+                            mealCalories: data["mealCalories"] as? Int,
+                            mealProtein: data["mealProtein"] as? Int,
+                            mealCarbs: data["mealCarbs"] as? Int,
+                            mealFat: data["mealFat"] as? Int,
+                            exerciseName: data["exerciseName"] as? String,
+                            previousValue: data["previousValue"] as? Double,
+                            newValue: data["newValue"] as? Double,
+                            progressionUnit: data["progressionUnit"] as? String,
+                            category: data["category"] as? String
                         )
                     } ?? []
-                    
+
                     completion(posts)
                 }
         }
     }
-    
-    
-    
+
     // MARK: - For You Feed (simple version)
     func fetchForYouPosts(for uid: String, completion: @escaping ([Post]) -> Void) {
         
@@ -176,12 +219,12 @@ class PostManager {
         let likedRef = self.db.collection("posts").whereField("likes", arrayContains: uid)
         
         likedRef.getDocuments { likedSnap, _ in
-            var interestedRestaurants: [String] = []
+            var interestedGyms: [String] = []
             
-            // Collect restaurant preferences
+            // Collect gym preferences
             likedSnap?.documents.forEach { doc in
-                if let rest = doc.data()["restaurant"] as? String, !rest.isEmpty {
-                    interestedRestaurants.append(rest)
+                if let rest = doc.data()["gym"] as? String, !rest.isEmpty {
+                    interestedGyms.append(rest)
                 }
             }
             
@@ -198,19 +241,28 @@ class PostManager {
                         imageURL: data["imageURL"] as? String,
                         author: data["author"] as? String ?? "",
                         authorId: data["authorId"] as? String ?? "",
-                        restaurantName: data["restaurant"] as? String,
-                        restaurant: data["restaurant"] as? String,
+                        gymName: data["gym"] as? String,
+                        gym: data["gym"] as? String,
                         rating: data["rating"] as? Double ?? 0.0,
                         timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
-                        restaurantLat: data["restaurantLat"] as? Double,
-                        restaurantLon: data["restaurantLon"] as? Double
+                        gymLat: data["gymLat"] as? Double,
+                        gymLon: data["gymLon"] as? Double,
+                        mealCalories: data["mealCalories"] as? Int,
+                        mealProtein: data["mealProtein"] as? Int,
+                        mealCarbs: data["mealCarbs"] as? Int,
+                        mealFat: data["mealFat"] as? Int,
+                        exerciseName: data["exerciseName"] as? String,
+                        previousValue: data["previousValue"] as? Double,
+                        newValue: data["newValue"] as? Double,
+                        progressionUnit: data["progressionUnit"] as? String,
+                        category: data["category"] as? String
                     )
                 } ?? []
                 
                 // Rank posts by preference match
                 let sorted = allPosts.sorted { a, b in
-                    let matchA = interestedRestaurants.contains(a.restaurant ?? "")
-                    let matchB = interestedRestaurants.contains(b.restaurant ?? "")
+                    let matchA = interestedGyms.contains(a.gym ?? "")
+                    let matchB = interestedGyms.contains(b.gym ?? "")
                     return (matchA ? 1 : 0) > (matchB ? 1 : 0)
                 }
                 
@@ -395,13 +447,13 @@ class PostManager {
             }
     }
     
-    func fetchPosts(forRestaurant name: String, completion: @escaping ([Post]) -> Void) {
+    func fetchPosts(forGym name: String, completion: @escaping ([Post]) -> Void) {
         db.collection("posts")
-            .whereField("restaurant", isEqualTo: name)
+            .whereField("gym", isEqualTo: name)
             .order(by: "timestamp", descending: true)
             .getDocuments { snapshot, error in
                 if let error = error {
-                    print("Restaurant fetch error:", error.localizedDescription)
+                    print("Gym fetch error:", error.localizedDescription)
                     completion([])
                     return
                 }
@@ -416,17 +468,45 @@ class PostManager {
                         imageURL: data["imageURL"] as? String,
                         author: data["author"] as? String ?? "",
                         authorId: data["authorId"] as? String ?? "",
-                        restaurantName: data["restaurant"] as? String,
-                        restaurant: data["restaurant"] as? String,
+                        gymName: data["gym"] as? String,
+                        gym: data["gym"] as? String,
                         rating: data["rating"] as? Double ?? 0.0,
                         timestamp: (data["timestamp"] as? Timestamp)?.dateValue() ?? Date(),
-                        restaurantLat: data["restaurantLat"] as? Double,
-                        restaurantLon: data["restaurantLon"] as? Double
+                        gymLat: data["gymLat"] as? Double,
+                        gymLon: data["gymLon"] as? Double,
+                        mealCalories: data["mealCalories"] as? Int,
+                        mealProtein: data["mealProtein"] as? Int,
+                        mealCarbs: data["mealCarbs"] as? Int,
+                        mealFat: data["mealFat"] as? Int,
+                        exerciseName: data["exerciseName"] as? String,
+                        previousValue: data["previousValue"] as? Double,
+                        newValue: data["newValue"] as? Double,
+                        progressionUnit: data["progressionUnit"] as? String,
+                        category: data["category"] as? String
                     )
                 } ?? []
-                
+
                 completion(posts)
             }
+    }
+
+    // MARK: - Workout Streak
+    func updateWorkoutStreak(for uid: String) {
+        let ref = db.collection("users").document(uid)
+        ref.getDocument { snap, _ in
+            guard let data = snap?.data() else { return }
+            let lastDate = (data["lastWorkoutDate"] as? Timestamp)?.dateValue()
+            let current  = data["workoutStreak"] as? Int ?? 0
+            let today    = Calendar.current.startOfDay(for: Date())
+            let newStreak: Int
+            if let last = lastDate {
+                let diff = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: last), to: today).day ?? 0
+                newStreak = diff == 0 ? current : (diff == 1 ? current + 1 : 1)
+            } else {
+                newStreak = 1
+            }
+            ref.updateData(["workoutStreak": newStreak, "lastWorkoutDate": Timestamp(date: Date())])
+        }
     }
 
     // MARK: - Saved Posts (Bookmark System)

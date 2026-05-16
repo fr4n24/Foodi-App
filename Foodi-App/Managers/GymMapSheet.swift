@@ -2,9 +2,9 @@ import SwiftUI
 import MapKit
 import CoreLocation
 
-struct RestaurantMapSheet: View {
+struct GymMapSheet: View {
     let target: CLLocationCoordinate2D
-    let restaurantName: String
+    let gymName: String
 
 
     @Environment(\.dismiss) var dismiss
@@ -17,12 +17,12 @@ struct RestaurantMapSheet: View {
 
             // MARK: - MAP
             Map(position: $position) {
-                Marker(restaurantName, coordinate: target)
+                Marker(gymName, coordinate: target)
 
             }
             .mapStyle(.standard)
             .onAppear {
-                centerOnRestaurant()
+                centerOnGym()
             }
             .onMapCameraChange { context in
                 // Keep position state in sync with user's moves
@@ -70,7 +70,7 @@ struct RestaurantMapSheet: View {
     }
 
     // MARK: - Center on Target
-    private func centerOnRestaurant() {
+    private func centerOnGym() {
         let region = MKCoordinateRegion(
             center: target,
             span: MKCoordinateSpan(latitudeDelta: zoomLevel,

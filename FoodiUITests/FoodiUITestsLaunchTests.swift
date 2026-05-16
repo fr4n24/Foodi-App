@@ -1,13 +1,13 @@
 //
-//  FoodiUITestsLaunchTests.swift
-//  FoodiUITests
+//  GymLinkUITestsLaunchTests.swift
+//  GymLinkUITests
 //
 //  Created by Francisco Campa on 9/22/25.
 //
 
 import XCTest
 
-final class FoodiUITestsLaunchTests: XCTestCase {
+final class GymLinkUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

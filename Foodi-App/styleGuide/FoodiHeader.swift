@@ -1,6 +1,6 @@
 //
-//  FoodiHeader.swift
-//  Foodi
+//  GymLinkHeader.swift
+//  GymLink
 //
 //  Created by d-rod on 10/29/25.
 //
@@ -8,7 +8,7 @@
 import SwiftUI
 
 
-struct FoodiHeader: View {
+struct GymLinkHeader: View {
     // Actions
     var onProfile: () -> Void = {}
     var onSettings: () -> Void = {}
@@ -17,7 +17,7 @@ struct FoodiHeader: View {
     var bannerColor: Color = .foodiBlue
     var titleSize: CGFloat = 22
     var titleWeight: Font.Weight = .bold
-    var titleText: String = "Foodi"
+    var titleText: String = "GymLink"
 
     var body: some View {
         let iconColor: Color = .white
@@ -34,10 +34,17 @@ struct FoodiHeader: View {
                 .buttonStyle(.plain)
             }
 
-            // Title
-            Text(titleText)
-                .font(.system(size: titleSize, weight: titleWeight))
-                .foregroundColor(.white)
+            // Logo + title wordmark
+            HStack(spacing: 8) {
+                Image("GymLinkLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: titleSize + 8, height: titleSize + 8)
+                    .clipShape(RoundedRectangle(cornerRadius: (titleSize + 8) * 0.22))
+                Text(titleText)
+                    .font(.system(size: titleSize, weight: titleWeight))
+                    .foregroundColor(.white)
+            }
 
             Spacer(minLength: 0)
 
@@ -71,10 +78,10 @@ struct FoodiHeader: View {
 }
 
 
-extension FoodiHeader {
+extension GymLinkHeader {
     init(
         bannerColor: Color = .foodiBlue,
-        titleText: String = "Foodi",
+        titleText: String = "GymLink",
         titleSize: CGFloat = 22,
         titleWeight: Font.Weight = .bold,
         onBack: (() -> Void)? = nil,

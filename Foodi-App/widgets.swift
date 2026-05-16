@@ -1,6 +1,6 @@
 //
 //  Widgets.swift
-//  Foodi
+//  GymLink
 //
 //  Created by Francisco Campa on 10/12/25.
 //
@@ -66,9 +66,7 @@ struct WidgetDetailView: View {
                     // }
 
                 case .saved:
-                    NavigationView {
-                        SavedPostsView()
-                    }
+                    FavoritesView()
                 }
             }
             
@@ -92,7 +90,7 @@ enum WidgetType: String, Identifiable {
     var title: String {
         switch self {
         case .feed: return "Feed"
-        case .leaderboard: return "Leaderboard (Top Foodies)"
+        case .leaderboard: return "Leaderboard (Top GymLinkers)"
         case .notifications: return "Notifications"
         case .map: return "Map"
         case .saved: return "Saved Posts"

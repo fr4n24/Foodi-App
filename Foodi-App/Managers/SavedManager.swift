@@ -1,6 +1,6 @@
 //
-//  FavoriteManager.swift
-//  Foodi
+//  SavedManager.swift
+//  GymLink
 //
 //  Created by Francisco Campa on 12/4/25.
 //
@@ -10,23 +10,23 @@ import FirebaseFirestore
 import CoreLocation
 import MapKit
 
-class FavoriteManager {
-    static let shared = FavoriteManager()
+class SavedManager {
+    static let shared = SavedManager()
     private let db = Firestore.firestore()
     
-    private func userFavoritesRef() -> CollectionReference? {
+    private func userSavedsRef() -> CollectionReference? {
         guard let uid = Auth.auth().currentUser?.uid else { return nil }
         return db.collection("users").document(uid).collection("favorites")
     }
     
-    // Check if restaurant is favorited
-    func isFavorited(_ restaurant: RestaurantDetail, completion: @escaping (Bool) -> Void) {
-        guard let ref = userFavoritesRef() else {
+    // Check if gym is favorited
+    func isSavedd(_ gym: GymDetail, completion: @escaping (Bool) -> Void) {
+        guard let ref = userSavedsRef() else {
             completion(false)
             return
         }
         
-        let docId = restaurant.name
+        let docId = gym.name
             .lowercased()
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "'", with: "")
@@ -39,13 +39,13 @@ class FavoriteManager {
     
     
     // Toggle favorite
-    func toggleFavorite(_ restaurant: RestaurantDetail, completion: @escaping (Bool) -> Void) {
-        guard let ref = userFavoritesRef() else {
+    func toggleSaved(_ gym: GymDetail, completion: @escaping (Bool) -> Void) {
+        guard let ref = userSavedsRef() else {
             completion(false)
             return
         }
         
-        let docId = restaurant.name
+        let docId = gym.name
             .lowercased()
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "'", with: "")
@@ -58,27 +58,27 @@ class FavoriteManager {
                 docRef.delete { _ in completion(false) }
             } else {
                 docRef.setData([
-                    "name": restaurant.name,
-                    "lat": restaurant.coordinate.latitude,
-                    "lon": restaurant.coordinate.longitude,
-                    "address": restaurant.address,
+                    "name": gym.name,
+                    "lat": gym.coordinate.latitude,
+                    "lon": gym.coordinate.longitude,
+                    "address": gym.address,
                     "timestamp": FieldValue.serverTimestamp()
                 ]) { _ in completion(true) }
             }
         }
     }
     
-    func fetchFavorites(completion: @escaping ([RestaurantDetail]) -> Void) {
-            guard let ref = userFavoritesRef() else {
+    func fetchSaveds(completion: @escaping ([GymDetail]) -> Void) {
+            guard let ref = userSavedsRef() else {
                 completion([])
                 return
             }
 
             ref.getDocuments { snap, _ in
-                let items: [RestaurantDetail] = snap?.documents.compactMap { doc in
+                let items: [GymDetail] = snap?.documents.compactMap { doc in
                     let data = doc.data()
 
-                    return RestaurantDetail(
+                    return GymDetail(
                         name: data["name"] as? String ?? "Unknown",
                         coordinate: CLLocationCoordinate2D(
                             latitude: data["lat"] as? Double ?? 0,
